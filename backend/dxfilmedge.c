@@ -210,50 +210,178 @@
 //     return error_number; // Return 0 for success
 // }
 
-int parse_dx_code(const char *source, int *dx_code_1, int *dx_code_2, int *frame_number, bool *half_frame_flag) {
-    const char *ptr = source; // Pointer to traverse the string
-    char *end_ptr;           // Pointer for strtol to indicate where parsing stopped
+// typedef struct {
+//     int dx_code_1;
+//     int dx_code_2;
+//     int frame_number;
+//     bool half_frame_flag;
+//     const char *binary_dx_code_1;
+//     const char *binary_dx_code_2;
+//     const char *binary_frame_number;
+// } dx_data;
+
+
+
+// int preprocess_dx_code(const char *source, dx_data *data) {
+//     // Parse and validate as before but store in dx_data structure
+//     // Also precompute binary strings for dx_code_1, dx_code_2, and frame_number
+//     static char dx_code_1_binary[8], dx_code_2_binary[5], frame_number_binary[7];
+
+//     data->dx_code_1 = ...;  // Parse dx_code_1
+//     data->dx_code_2 = ...;  // Parse dx_code_2
+//     data->frame_number = ...; // Parse frame_number
+//     data->half_frame_flag = ...; // Parse flag
+
+//     // Precompute binaries
+//     int_to_binary_string(data->dx_code_1, 7, dx_code_1_binary);
+//     int_to_binary_string(data->dx_code_2, 4, dx_code_2_binary);
+//     if (data->frame_number >= 0) {
+//         int_to_binary_string(data->frame_number, 6, frame_number_binary);
+//     }
+
+//     data->binary_dx_code_1 = dx_code_1_binary;
+//     data->binary_dx_code_2 = dx_code_2_binary;
+//     data->binary_frame_number = data->frame_number >= 0 ? frame_number_binary : NULL;
+
+//     return 0; // Success
+// }
+
+// int parse_dx_code(const char *source, int *dx_code_1, int *dx_code_2, int *frame_number, bool *half_frame_flag) {
+//     const char *ptr = source; // Pointer to traverse the string
+//     char *end_ptr;           // Pointer for strtol to indicate where parsing stopped
     
-    *frame_number = -1; // No frame number present
-    *half_frame_flag = false;
+//     *frame_number = -1; // No frame number present
+//     *half_frame_flag = false;
 
-    // Parse dx_code_1
-    *dx_code_1 = strtol(ptr, &end_ptr, 10);
-    if (*dx_code_1 < 0 || *dx_code_1 > 127 || *end_ptr != '-') {
-        fprintf(stderr, "Invalid dx_code_1 or missing '-': %s\n", source);
-        return -1;
+//     // Parse dx_code_1
+//     *dx_code_1 = strtol(ptr, &end_ptr, 10);
+//     if (*dx_code_1 < 0 || *dx_code_1 > 127 || *end_ptr != '-') {
+//         fprintf(stderr, "Invalid dx_code_1 or missing '-': %s\n", source);
+//         return -1;
+//     }
+//     ptr = end_ptr + 1; // Move past the '-'
+
+//     // Parse dx_code_2
+//     *dx_code_2 = strtol(ptr, &end_ptr, 10);
+//     if (*dx_code_2 < 0 || *dx_code_2 > 15 || (*end_ptr != '/' && *end_ptr != '\0')) {
+//         fprintf(stderr, "Invalid dx_code_2 or unexpected character: %s\n", source);
+//         return -1;
+//     }
+//     ptr = end_ptr; // Move past the number
+
+//     // Parse optional frame_number and half_frame_flag
+//     if (*ptr == '/') {
+//         ptr++; // Move past the '/'
+//         *frame_number = strtol(ptr, &end_ptr, 10);
+//         if (*frame_number < 0 || *frame_number > 63) {
+//             fprintf(stderr, "Invalid frame_number: %s\n", source);
+//             return -1;
+//         }
+//         *half_frame_flag = (*end_ptr == 'A');
+//         if (*half_frame_flag) {
+//             end_ptr++; // Move past 'A'
+//         }
+//         ptr = end_ptr; // Update pointer
+//     }
+
+//     // Ensure we processed the whole string
+//     if (*ptr != '\0') {
+//         fprintf(stderr, "Unexpected characters at the end: %s\n", source);
+//         return -1;
+//     }
+
+//     return 0; // Success
+// }
+
+
+// Utility to convert integer to binary string with fixed width
+void int_to_binary(int value, int width, char *output) {
+    for (int i = 0; i < width; i++) {
+        output[width - 1 - i] = (value & (1 << i)) ? '1' : '0';
     }
-    ptr = end_ptr + 1; // Move past the '-'
+    output[width] = '\0';
+}
 
-    // Parse dx_code_2
-    *dx_code_2 = strtol(ptr, &end_ptr, 10);
-    if (*dx_code_2 < 0 || *dx_code_2 > 15 || (*end_ptr != '/' && *end_ptr != '\0')) {
-        fprintf(stderr, "Invalid dx_code_2 or unexpected character: %s\n", source);
-        return -1;
-    }
-    ptr = end_ptr; // Move past the number
+// // Function to compute the parity bit
+// int compute_parity(const char *binary, const int offset) {
+//     int sum = 0;
+//     for (int i = offset; binary[i] != '\0'; i++) {
+//         if (binary[i] == '1') {
+//             sum++;
+//         }
+//     }
+//     return sum % 2; // 1 if odd, 0 if even
+// }
 
-    // Parse optional frame_number and half_frame_flag
-    if (*ptr == '/') {
-        ptr++; // Move past the '/'
-        *frame_number = strtol(ptr, &end_ptr, 10);
-        if (*frame_number < 0 || *frame_number > 63) {
-            fprintf(stderr, "Invalid frame_number: %s\n", source);
-            return -1;
+// Main parsing function
+int parse_dx_code(const char *source, char *binary_output, int *output_length, bool *has_frame_info) {
+
+    int parity_bit;
+    int dx_code_1 = -1, dx_code_2 = -1, frame_number = -1;
+    char half_frame_flag = '\0';
+    *has_frame_info = false; // Default to no frame info
+
+    // Parse the input string
+    if (strchr(source, '/')) {
+        // Format: 125-4/2A (with frame info)
+        if (sscanf(source, "%d-%d/%d%c", &dx_code_1, &dx_code_2, &frame_number, &half_frame_flag) < 3) {
+            return -1; // Invalid format
         }
-        *half_frame_flag = (*end_ptr == 'A');
-        if (*half_frame_flag) {
-            end_ptr++; // Move past 'A'
+        *has_frame_info = true;
+    } else {
+        // Format: 125-4 (no frame info)
+        if (sscanf(source, "%d-%d", &dx_code_1, &dx_code_2) != 2) {
+            return -1; // Invalid format
         }
-        ptr = end_ptr; // Update pointer
     }
 
-    // Ensure we processed the whole string
-    if (*ptr != '\0') {
-        fprintf(stderr, "Unexpected characters at the end: %s\n", source);
-        return -1;
+    // Convert components to binary strings
+    char binary_dx_code_1[8], binary_dx_code_2[5], binary_frame_number[7];
+    int_to_binary(dx_code_1, 7, binary_dx_code_1);  // 7 bits for dx_code_1
+    int_to_binary(dx_code_2, 4, binary_dx_code_2);  // 4 bits for dx_code_2
+    if (*has_frame_info && frame_number >= 0) {
+        int_to_binary(frame_number, 6, binary_frame_number); // 6 bits for frame_number
+        printf("frame number: %d\n", frame_number);
+        printf("binary format: %s\n", binary_frame_number);
     }
 
+
+
+    // Build the binary output
+    strcpy(binary_output, "101010"); // Start pattern
+    strcat(binary_output, binary_dx_code_1);
+    strcat(binary_output, "0"); // separator
+    strcat(binary_output, binary_dx_code_2);
+    if (*has_frame_info) {
+        strcat(binary_output, binary_frame_number);
+        if (half_frame_flag == 'A') {
+            strcat(binary_output, "1"); // Half-frame flag is 1 for 'A'
+        } else {
+            strcat(binary_output, "0"); // Default is 0
+        }
+        strcat(binary_output, "0"); // separator
+    }
+    
+
+    // Compute parity bit
+    for (int i = 6; binary_output[i] != '\0'; i++) {
+        if (binary_output[i] == '1') {
+            parity_bit++;
+        }
+    }
+
+    parity_bit %= 2;
+    printf("parity bit: %d\n", parity_bit);
+    if (parity_bit){
+        strcat(binary_output, "1");
+    }
+    else{
+        strcat(binary_output, "0");
+    }
+
+    strcat(binary_output, "0101"); // Stop pattern
+
+    *output_length = strlen(binary_output);
     return 0; // Success
 }
 
@@ -269,14 +397,26 @@ INTERNAL int dxfilmedge(struct zint_symbol *symbol, unsigned char source[], int 
     int dx_code_1, dx_code_2, frame_number;
     bool half_frame_flag = 0;
 
-    if (parse_dx_code(source, &dx_code_1, &dx_code_2, &frame_number, &half_frame_flag) == 0) {
-        printf("  dx_code_1: %d\n", dx_code_1);
-        printf("  dx_code_2: %d\n", dx_code_2);
-        if (frame_number >= 0){
-            printf("  frame_number: %d\n", frame_number);
-            printf("  half_frame_flag: %s\n\n", half_frame_flag ? "true" : "false");
-        }
-    } else {
+    // if (parse_dx_code(source, &dx_code_1, &dx_code_2, &frame_number, &half_frame_flag) == 0) {
+    //     printf("  dx_code_1: %d\n", dx_code_1);
+    //     printf("  dx_code_2: %d\n", dx_code_2);
+    //     if (frame_number >= 0){
+    //         printf("  frame_number: %d\n", frame_number);
+    //         printf("  half_frame_flag: %s\n\n", half_frame_flag ? "true" : "false");
+    //     }
+    // } else {
+    //     printf("  Failed to parse.\n\n");
+    // }
+
+
+    //const char *source, char *binary_output, int *output_length, bool *has_frame_info
+    char char_data[32];
+    int data_length;
+    bool has_frame_info;
+    if (parse_dx_code(source, char_data, &data_length, &has_frame_info) == 0){
+        printf("  Input parsed.\n");
+    }
+    else{
         printf("  Failed to parse.\n\n");
     }
 
@@ -286,7 +426,7 @@ INTERNAL int dxfilmedge(struct zint_symbol *symbol, unsigned char source[], int 
 
     const char *clock_pattern;
     int clock_length;
-    if (frame_number >= 0){
+    if (has_frame_info){
         clock_pattern = long_clock_pattern;
         clock_length = sizeof(long_clock_pattern) -1;
     }
@@ -296,27 +436,31 @@ INTERNAL int dxfilmedge(struct zint_symbol *symbol, unsigned char source[], int 
     }
     printf("  clock pattern: %s\n", clock_pattern);
     printf("  clock length: %d\n", clock_length);
+
+    printf("  data: %s\n", char_data);
+    // printf("  data length: %s\n", data_length);
     // clock_length = sizeof(clock_pattern) - 1;
     
 
 
-    // Start and stop patterns
-    const char start_pattern[] = "101010";
-    int start_pattern_length = sizeof(start_pattern) - 1;
-    const char stop_pattern[] = "101";
-    int stop_pattern_length = sizeof(stop_pattern) - 1;
+    // // Start and stop patterns
+    // const char start_pattern[] = "101010";
+    // int start_pattern_length = sizeof(start_pattern) - 1;
+    // const char stop_pattern[] = "0101";
+    // int stop_pattern_length = sizeof(stop_pattern) - 1;
 
-    const int dx_code_1_length = 7;
-    const int dx_code_2_length = 4;
-    const int frame_number_length = 6;
-    // Mock data for the second row
-    const char data[] = "1001111000101111110000";
-    int data_length = sizeof(data) - 1; // Exclude null terminator
+    // const int dx_code_1_length = 7;
+    // const int dx_code_2_length = 4;
+    // const int frame_number_length = 6;
+    // // Mock data for the second row
 
-    // Ensure mock data width matches the clock row width
-    if (data_length != clock_length - start_pattern_length - stop_pattern_length) {
-        return ZINT_ERROR_INVALID_DATA; // Return an error if data lengths don't match
-    }
+    // // const char data[] = "1001111000101111110000";
+    // // int data_length = sizeof(data) - 1; // Exclude null terminator
+
+    // // Ensure mock data width matches the clock row width
+    // if (data_length != clock_length - start_pattern_length - stop_pattern_length) {
+    //     return ZINT_ERROR_INVALID_DATA; // Return an error if data lengths don't match
+    // }
 
     // First row: Clock pattern
 
@@ -332,35 +476,82 @@ INTERNAL int dxfilmedge(struct zint_symbol *symbol, unsigned char source[], int 
     // Reset writer for the second row
     writer = 0;
 
-    // Second row: Start pattern
-    for (i = 0; i < start_pattern_length; i++) {
-        if (start_pattern[i] == '1') {
-            set_module(symbol, 1, writer); // Black bar for second row
-        } else if (start_pattern[i] == '0') {
-            unset_module(symbol, 1, writer); // White bar for second row
+    // Second row
+    for (i = 0; i < clock_length; i++) {
+        if (char_data[i] == '1') {
+            set_module(symbol, 1, writer); // Black bar
+        } else if (char_data[i] == '0') {
+            unset_module(symbol, 1, writer); // White bar
         }
         writer++;
     }
 
-    // Second row: Mock data
-    for (i = 0; i < data_length; i++) {
-        if (data[i] == '1') {
-            set_module(symbol, 1, writer); // Black bar for second row
-        } else if (data[i] == '0') {
-            unset_module(symbol, 1, writer); // White bar for second row
-        }
-        writer++;
-    }
+    // // Second row: Start pattern
+    // for (i = 0; i < start_pattern_length; i++) {
+    //     if (start_pattern[i] == '1') {
+    //         set_module(symbol, 1, writer); // Black bar for second row
+    //     } else if (start_pattern[i] == '0') {
+    //         unset_module(symbol, 1, writer); // White bar for second row
+    //     }
+    //     writer++;
+    // }
 
-    // Second row: Stop pattern
-    for (i = 0; i < stop_pattern_length; i++) {
-        if (stop_pattern[i] == '1') {
-            set_module(symbol, 1, writer); // Black bar for second row
-        } else if (stop_pattern[i] == '0') {
-            unset_module(symbol, 1, writer); // White bar for second row
-        }
-        writer++;
-    }
+    // // DX code 1
+    // for (i = 0; i < dx_code_1_length; i++) {
+    //     if (dx_code_1[i] == '1') {
+    //         set_module(symbol, 1, writer); // Black bar for second row
+    //     } else if (dx_code_1[i] == '0') {
+    //         unset_module(symbol, 1, writer); // White bar for second row
+    //     }
+    //     writer++;
+    // }
+
+    // // Separator
+    // unset_module(symbol, 1, writer);
+    // writer++;
+
+    // // Second row: dx code 2
+    // for (i = 0; i < dx_code_2_length; i++) {
+    //     if (dx_code_2[i] == '1') {
+    //         set_module(symbol, 1, writer); // Black bar for second row
+    //     } else if (dx_code_2[i] == '0') {
+    //         unset_module(symbol, 1, writer); // White bar for second row
+    //     }
+    //     writer++;
+    // }
+
+    // // Frame number (if present)
+    // if (frame_number >= 0){
+    //     for (i = 0; i < frame_number_length; i++) {
+    //         if (frame_number[i] == '1') {
+    //             set_module(symbol, 1, writer); // Black bar for second row
+    //         } else if (frame_number[i] == '0') {
+    //             unset_module(symbol, 1, writer); // White bar for second row
+    //         }
+    //         writer++;
+    //     }
+    //     if (half_frame_flag){
+    //         set_module(symbol, 1, writer);
+    //     }
+    //     else{
+    //         unset_module(symbol, 1, writer);
+    //     }
+    //     writer++;
+    //     // Separator
+    //     unset_module(symbol, 1, writer);
+    //     writer++;
+    // }
+
+
+    // // Second row: Stop pattern
+    // for (i = 0; i < stop_pattern_length; i++) {
+    //     if (stop_pattern[i] == '1') {
+    //         set_module(symbol, 1, writer); // Black bar for second row
+    //     } else if (stop_pattern[i] == '0') {
+    //         unset_module(symbol, 1, writer); // White bar for second row
+    //     }
+    //     writer++;
+    // }
 
     // Set dimensions
     symbol->rows = num_rows;                // Two rows: clock + mock data
