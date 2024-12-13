@@ -47,6 +47,7 @@
 
 #define MAX_DX_INFO_LENGTH 7 // Max length of the DX info part. Include the \0. Eg: "018500\0", "150-10\0"
 #define MAX_FRAME_INFO_LENGTH 4 // Max length of the frame info part. Eg: "00A\0", "23A\0"
+#define DEBUG_STR_LEN 20
 
 /* Utility to convert integer to binary string with fixed width */
 void int_to_binary(int value, int width, char *output) {
@@ -156,10 +157,7 @@ int parse_dx_code(struct zint_symbol *symbol, const unsigned char *source, char 
     if (detected_char){
         // Extract the part before "/" into dx_info    
         size_t dx_length = detected_char - source;
-        printf("dx info stringlength: %d\n", dx_length);
         if (dx_length >= MAX_DX_INFO_LENGTH){
-            fprintf(stderr, "Error: DX info too long.\n");
-            // return errtxt(ZINT_ERROR_TOO_LONG, symbol, 357, "DX code is too long");
             return errtxt(ZINT_ERROR_TOO_LONG, symbol, 1001, "DX part is too long.");
         }
         strncpy(dx_info, source, dx_length);
@@ -167,7 +165,6 @@ int parse_dx_code(struct zint_symbol *symbol, const unsigned char *source, char 
         // Extract the part after "/" into frame_info
         const unsigned char *frame_start = detected_char + 1;
         if (strlen(frame_start) >= MAX_FRAME_INFO_LENGTH) {
-            fprintf(stderr, "Error: Frame info too long.\n");
             return errtxt(ZINT_ERROR_TOO_LONG, symbol, 1002, "Frame number part is too long.");
         }
         strcpy(frame_info, frame_start);
@@ -180,14 +177,11 @@ int parse_dx_code(struct zint_symbol *symbol, const unsigned char *source, char 
         }
         strcpy(dx_info, source);
     }
-    printf("DX info part: %s\n", dx_info);
-    if (has_frame_info){
-        printf("Frame info part: %s\n", frame_info);
-    }
+    if (ZINT_DEBUG_PRINT) printf("\nDX info part: \"%s\", Frame info part: \"%s\"\n", dx_info, frame_info);
     // Parse the dx_info
     if (strchr(dx_info, '-')){
-        printf("Found \"-\" separator, DX code 1 and 2 are separated\n");
-        // Format: DX part 1 and DX part 2, separated by a dash
+        // DX code parts 1 and 2 are given directly, separated by a '-'
+        if (ZINT_DEBUG_PRINT) printf("DX code 1 and 2 are separated by a dash \'-\'\n");
         if (sscanf(dx_info, "%d-%d", &dx_code_1, &dx_code_2) < 2){
             return errtxt(ZINT_ERROR_INVALID_DATA, symbol, 1004, "Wrong format for DX parts 1 and 2. Expected format: XXX-XX (digits).");
         }
@@ -199,7 +193,8 @@ int parse_dx_code(struct zint_symbol *symbol, const unsigned char *source, char 
         }
     }
     else{
-        // Format: 4 digits (DX Extract) or 6 digits (DX Full)
+        // DX format is either 4 digits (DX Extract) or 6 digits (DX Full)
+        if (ZINT_DEBUG_PRINT) printf("No \'-\' separator, computing from DX Extract (4 digits) or DX Full (6 digits)\n");
         if (strlen(dx_info) > 6){
             return errtxt(ZINT_ERROR_TOO_LONG, symbol, 1005, "DX number is too long. Expected: 4 digits (DX extract) or 6 digits (DX full).");
         }
@@ -207,39 +202,32 @@ int parse_dx_code(struct zint_symbol *symbol, const unsigned char *source, char 
             return errtxt(ZINT_ERROR_INVALID_DATA, symbol, 1006, "DX number is incorrect. Expected: 4 digits (DX extract) or 6 digits (DX full).");
         }
         if (strlen(dx_info) == 6){
-            // DX Full. Remove first and last character
-            printf("DX info length: %d (DX Full)\n", strlen(dx_info));
+            if (ZINT_DEBUG_PRINT) printf("DX full format detected: %s. Removing the first and the last characters.\n", dx_info);
+            // Convert DX Full to DX Extract (remove first and last character)
             for (i=0; i <= 3; ++i){
                 dx_info[i] = dx_info[i+1];
             }
             dx_info[4] = '\0';
-            printf("DX extract: %s\n", dx_info);
         }
-        printf("DX info length: %d\n", strlen(dx_info));
-        // DX extract
-        printf("DX info: %s\n", dx_info);
-                // if (sscanf(source, "%d-%d/%d%c", &dx_code_1, &dx_code_2, &frame_number, &half_frame_flag) < 3) {
-
+        // Compute the DX parts 1 and 2 from the DX extract
         if (sscanf(dx_info, "%d", &dx_extract) < 1){
             return errtxt(ZINT_ERROR_INVALID_DATA, symbol, 1006, "DX number is incorrect. Expected: 4 digits (DX extract) or 6 digits (DX full).");
         }
         if (dx_extract <= 0 || dx_extract > 2047){
             return errtxtf(ZINT_ERROR_INVALID_DATA, symbol, 1010, "DX extract is %d. Allowed values are between 0 and 2047.", dx_extract);
         }
-        printf("DX extract: %04d\n", dx_extract);
+        if (ZINT_DEBUG_PRINT) printf("Computed DX extract: %04d\n", dx_extract);
         dx_code_1 = dx_extract / 16;
         dx_code_2 = dx_extract % 16;
     }
 
-
-
-    printf("DX code 1: %d\n", dx_code_1);
-    printf("DX code 2: %d\n", dx_code_2);
-
-
     /* Convert components to binary strings */
     int_to_binary(dx_code_1, 7, binary_dx_code_1);  // 7 bits for dx_code_1
     int_to_binary(dx_code_2, 4, binary_dx_code_2);  // 4 bits for dx_code_2
+
+    if (ZINT_DEBUG_PRINT) printf("%-*s%d\t-> %s\n", DEBUG_STR_LEN, "DX code 1:", dx_code_1, binary_dx_code_1);
+    if (ZINT_DEBUG_PRINT) printf("%-*s%d\t-> %s\n", DEBUG_STR_LEN, "DX code 2:", dx_code_2, binary_dx_code_2);
+
     if (*has_frame_info) {
         str_to_uppercase(frame_info);
 
@@ -267,9 +255,7 @@ int parse_dx_code(struct zint_symbol *symbol, const unsigned char *source, char 
         if (frame_number < 0 || frame_number > 63){
             return errtxt(ZINT_ERROR_INVALID_DATA, symbol, 1009, "Frame number should be between 0 and 63.");
         }
-        printf("frame number: %d\n", frame_number);
-        printf("binary format: %s\n", binary_frame_number);
-        printf("half frame flag: %c\n", half_frame_flag);
+        if (ZINT_DEBUG_PRINT) printf("%-*s%d\t-> %s\n", DEBUG_STR_LEN, "Frame number:", frame_number, binary_frame_number);
     }
 
 
@@ -282,8 +268,10 @@ int parse_dx_code(struct zint_symbol *symbol, const unsigned char *source, char 
     if (*has_frame_info) {
         strcat(binary_output, binary_frame_number);
         if (half_frame_flag == 'A' || half_frame_flag == 'a') {
+            if (ZINT_DEBUG_PRINT) printf("%-*s\'%c\'\t-> 1\n", DEBUG_STR_LEN, "Half frame flag:", half_frame_flag);
             strcat(binary_output, "1"); // Half-frame flag is 1 for 'A'
         } else {
+            if (ZINT_DEBUG_PRINT) printf("%-*s\'%c\'\t-> 0\n", DEBUG_STR_LEN, "Half frame flag:", half_frame_flag);
             strcat(binary_output, "0"); // Default is 0
         }
         strcat(binary_output, "0"); // separator
@@ -298,7 +286,8 @@ int parse_dx_code(struct zint_symbol *symbol, const unsigned char *source, char 
     }
 
     parity_bit %= 2;
-    printf("parity bit: %d\n", parity_bit);
+    // if (ZINT_DEBUG_PRINT) printf("%-*s\'%c\'\t-> 0\n", DEBUG_STR_LEN, "Half frame flag:", half_frame_flag);
+    if (ZINT_DEBUG_PRINT) printf("%-*s%s\t-> %d\n", DEBUG_STR_LEN, "Parity bit:", parity_bit?"yes":"no", parity_bit);
     if (parity_bit){
         strcat(binary_output, "1");
     }
@@ -343,14 +332,10 @@ INTERNAL int dxfilmedge(struct zint_symbol *symbol, unsigned char source[], int 
     int data_length;
     bool has_frame_info;
     int parse_result = parse_dx_code(symbol, source, char_data, &data_length, &has_frame_info);
-    if (parse_result == 0){
-        printf("  Input parsed.\n");
-    }
-    else{
-        printf("  Failed to parse.\n\n");
+    if (parse_result != 0){
+        if (ZINT_DEBUG_PRINT) printf("Error %s\n\n", symbol->errtxt);
         return parse_result;
     }
-
 
     // Clock pattern: two formats exist, with or without frame number information.
     const char long_clock_pattern[] = "1111101010101010101010101010111";
@@ -366,10 +351,10 @@ INTERNAL int dxfilmedge(struct zint_symbol *symbol, unsigned char source[], int 
         clock_pattern = short_clock_pattern;
         clock_length = sizeof(short_clock_pattern) -1;
     }
-    printf("  clock pattern: %s\n", clock_pattern);
-    printf("  clock length: %d\n", clock_length);
+    // printf("  clock pattern: %s\n", clock_pattern);
+    // printf("  clock length: %d\n", clock_length);
 
-    printf("  data: %s\n", char_data);
+    // printf("  data: %s\n", char_data);
   
     // First row: Clock pattern
 
