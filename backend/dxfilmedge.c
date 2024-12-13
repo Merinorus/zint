@@ -42,8 +42,11 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
 #include "common.h"
 
+#define MAX_DX_INFO_LENGTH 7 // Max length of the DX info part. Include the \0. Eg: "018500\0", "150-10\0"
+#define MAX_FRAME_INFO_LENGTH 4 // Max length of the frame info part. Eg: "00A\0", "23A\0"
 
 /* Utility to convert integer to binary string with fixed width */
 void int_to_binary(int value, int width, char *output) {
@@ -54,149 +57,182 @@ void int_to_binary(int value, int width, char *output) {
     output[width] = '\0';
 }
 
+// Function to convert a string to uppercase
+void str_to_uppercase(char *str) {
+    for (int i = 0; str[i] != '\0'; i++) {
+        str[i] = toupper((unsigned char)str[i]);
+    }
+}
+
 // /* Main parsing function */
-// int parse_dx_code(const unsigned char *source, char *binary_output, int *output_length, bool *has_frame_info) {
+int parse_dx_code(const unsigned char *source, char *binary_output, int *output_length, bool *has_frame_info) {
 
-//     int i;
-//     int parity_bit = 0;
-//     int dx_code_1 = -1, dx_code_2 = -1, frame_number = -1;
-//     char binary_dx_code_1[8], binary_dx_code_2[5], binary_frame_number[7];
-//     char half_frame_flag = '\0';
-//     *has_frame_info = false; // Default to no frame info
-
-//     /* Parse the input string */
-//     if (strchr(source, '/')) {
-//         /* Format: 125-4/2A (with frame info) */
-//         if (sscanf(source, "%d-%d/%d%c", &dx_code_1, &dx_code_2, &frame_number, &half_frame_flag) < 3) {
-//             return -1; // Invalid format
-//         }
-//         *has_frame_info = true;
-//     } else {
-//         /* Format: 125-4 (no frame info) */
-//         if (sscanf(source, "%d-%d", &dx_code_1, &dx_code_2) != 2) {
-//             return -1; // Invalid format
-//         }
-//     }
-
-//     /* Convert components to binary strings */
-//     int_to_binary(dx_code_1, 7, binary_dx_code_1);  // 7 bits for dx_code_1
-//     int_to_binary(dx_code_2, 4, binary_dx_code_2);  // 4 bits for dx_code_2
-//     if (*has_frame_info && frame_number >= 0) {
-//         int_to_binary(frame_number, 6, binary_frame_number); // 6 bits for frame_number
-//         printf("frame number: %d\n", frame_number);
-//         printf("binary format: %s\n", binary_frame_number);
-//     }
-
-
-
-//     /* Build the binary output */
-//     strcpy(binary_output, "101010"); // Start pattern
-//     strcat(binary_output, binary_dx_code_1);
-//     strcat(binary_output, "0"); // separator
-//     strcat(binary_output, binary_dx_code_2);
-//     if (*has_frame_info) {
-//         strcat(binary_output, binary_frame_number);
-//         if (half_frame_flag == 'A') {
-//             strcat(binary_output, "1"); // Half-frame flag is 1 for 'A'
-//         } else {
-//             strcat(binary_output, "0"); // Default is 0
-//         }
-//         strcat(binary_output, "0"); // separator
-//     }
-    
-
-//     // Compute parity bit
-//     for (i = 6; binary_output[i] != '\0'; i++) {
-//         if (binary_output[i] == '1') {
-//             parity_bit++;
-//         }
-//     }
-
-//     parity_bit %= 2;
-//     printf("parity bit: %d\n", parity_bit);
-//     if (parity_bit){
-//         strcat(binary_output, "1");
-//     }
-//     else{
-//         strcat(binary_output, "0");
-//     }
-
-//     strcat(binary_output, "0101"); // Stop pattern
-
-//     *output_length = strlen(binary_output);
-//     return 0; // Success
-// }
-
-int parse_dx_code(const char *source, char *binary_output, int *output_length, bool *has_frame_info) {
-    int dx_code_1 = -1, dx_code_2 = -1, frame_number = -1;
-    char half_frame_flag = '\0';
-    char binary_dx_code_1[8] = {0}, binary_dx_code_2[5] = {0}, binary_frame_number[7] = {0};
+    int i;
     int parity_bit = 0;
+    int dx_extract = -1;
+    int dx_code_1 = -1, dx_code_2 = -1, frame_number = -1;
+    char binary_dx_code_1[8], binary_dx_code_2[5], binary_frame_number[7];
+    char half_frame_flag = '\0', special_frame_number='\0';
+    *has_frame_info = false; // Default to no frame info
 
-    *has_frame_info = false; // Default: No frame info
+    // TODO: check char array size
+    unsigned char dx_info[MAX_DX_INFO_LENGTH] = "\0";
+    unsigned char frame_info[MAX_FRAME_INFO_LENGTH] = "\0";
 
-    // Check for frame part (/16 or /16A)
-    const char *frame_start = strchr(source, '/');
-    if (frame_start) {
-        if (sscanf(frame_start, "/%d%c", &frame_number, &half_frame_flag) >= 1) {
-            *has_frame_info = true;
-        }
-        if (frame_number < 0 || frame_number > 63) {
-            fprintf(stderr, "Invalid frame number: %d\n", frame_number);
+    const unsigned char *frame_number_separator = strchr(source, '/');
+    if (frame_number_separator){
+        // Extract the part before "/" into dx_info    
+        size_t dx_length = frame_number_separator - source;
+        printf("dx info stringlength: %d\n", dx_length);
+        if (dx_length >= MAX_DX_INFO_LENGTH){
+            fprintf(stderr, "Error: DX info too long.\n");
             return -1;
         }
+        strncpy(dx_info, source, dx_length);
+        dx_info[dx_length] = '\0';
+        // Extract the part after "/" into frame_info
+        const unsigned char *frame_start = frame_number_separator + 1;
+        if (strlen(frame_start) >= MAX_FRAME_INFO_LENGTH) {
+            fprintf(stderr, "Error: Frame info too long.\n");
+            return -1;
+        }
+        strcpy(frame_info, frame_start);
+        *has_frame_info = true;
+    }
+    else{
+        // No "/" found, store the entire input in dx_info
+        if (strlen(source) >= MAX_DX_INFO_LENGTH) {
+            fprintf(stderr, "Error: Input too long.\n");
+            return -1;
+        }
+        strcpy(dx_info, source);
+    }
+    printf("DX info part: %s\n", dx_info);
+    if (has_frame_info){
+        printf("Frame info part: %s\n", frame_info);
     }
 
-    // Parse main DX code parts
-    if (sscanf(source, "%d-%d", &dx_code_1, &dx_code_2) == 2) {
-        // dx_code_1 and dx_code_2 parsed correctly
-    } else if (sscanf(source, "%d", &dx_code_1) == 1) {
-        // Handle single combined DX code
-        dx_code_2 = dx_code_1 % 16;
-        dx_code_1 /= 16;
-    } else {
-        fprintf(stderr, "Invalid input format: %s\n", source);
-        return -1;
+    // Parse the dx_info
+    if (strchr(dx_info, '-')){
+        printf("Found \"-\" separator, DX code 1 and 2 are separeted\n");
+        // Format: DX part 1 and DX part 2, separated by a dash
+        if (sscanf(dx_info, "%d-%d", &dx_code_1, &dx_code_2) < 2){
+            return -1; // invalid format
+        }
+    }
+    else{
+        // Format: 4 digits (DX Extract) or 6 digits (DX Full)
+        if (strlen(dx_info) == 5 || strlen(dx_info) > 6){
+            return -1; // invalid format
+        }
+        if (strlen(dx_info) == 6){
+            // DX Full. Remove first and last character
+            printf("DX info length: %d (DX Full)\n", strlen(dx_info));
+            for (i=0; i <= 3; ++i){
+                dx_info[i] = dx_info[i+1];
+            }
+            dx_info[4] = '\0';
+            printf("DX extract: %s\n", dx_info);
+        }
+        printf("DX info length: %d\n", strlen(dx_info));
+        // DX extract
+        printf("DX info: %s\n", dx_info);
+                // if (sscanf(source, "%d-%d/%d%c", &dx_code_1, &dx_code_2, &frame_number, &half_frame_flag) < 3) {
+
+        if (sscanf(dx_info, "%d", &dx_extract) < 1){
+            return -1; // invalid format
+        }
+        printf("DX extract: %04d\n", dx_extract);
+        dx_code_1 = dx_extract / 16;
+        dx_code_2 = dx_extract % 16;
     }
 
-    // Debug: Print parsed components
-    printf("Parsed components:\n");
-    printf("  dx_code_1: %d\n", dx_code_1);
-    printf("  dx_code_2: %d\n", dx_code_2);
-    printf("  frame_number: %d\n", frame_number);
-    printf("  half_frame_flag: %c\n", half_frame_flag);
-    printf("  has_frame_info: %s\n", *has_frame_info ? "true" : "false");
-
-    // Convert components to binary
-    if (dx_code_1 >= 0) int_to_binary(dx_code_1, 7, binary_dx_code_1);
-    if (dx_code_2 >= 0) int_to_binary(dx_code_2, 4, binary_dx_code_2);
-    if (*has_frame_info && frame_number >= 0) {
-        int_to_binary(frame_number, 6, binary_frame_number);
+    if (dx_code_1 <= 0 || dx_code_1 > 127){
+        return -1; // invalid format
+    }
+    if (dx_code_2 < 0 || dx_code_2 > 15){
+        return -1; // invalid format
     }
 
-    // Build the binary output
+    printf("DX code 1: %d\n", dx_code_1);
+    printf("DX code 2: %d\n", dx_code_2);
+
+
+    /* Convert components to binary strings */
+    int_to_binary(dx_code_1, 7, binary_dx_code_1);  // 7 bits for dx_code_1
+    int_to_binary(dx_code_2, 4, binary_dx_code_2);  // 4 bits for dx_code_2
+    if (*has_frame_info) {
+        str_to_uppercase(frame_info);
+
+        // Map special values
+        if (strcmp(frame_info, "S") == 0 || strcmp(frame_info, "X") == 0) {
+            strcpy(frame_info, "62");
+        } else if (strcmp(frame_info, "SA") == 0 || strcmp(frame_info, "XA") == 0) {
+            strcpy(frame_info, "62A");
+        } else if (strcmp(frame_info, "K") == 0 || strcmp(frame_info, "00") == 0) {
+            strcpy(frame_info, "63");
+        } else if (strcmp(frame_info, "KA") == 0 || strcmp(frame_info, "00A") == 0) {
+            strcpy(frame_info, "63A");
+        } else if (strcmp(frame_info, "F") == 0) {
+            strcpy(frame_info, "0");
+        } else if (strcmp(frame_info, "FA") == 0) {
+            strcpy(frame_info, "0A");
+        }
+
+        // if (*has_frame_info && frame_number >= 0) {
+        if (sscanf(frame_info, "%d%c", &frame_number, &half_frame_flag) < 1){
+            return -1; // invalid format
+        }
+        int_to_binary(frame_number, 6, binary_frame_number); // 6 bits for frame_number
+        if (frame_number < 0 || frame_number > 63){
+            return -1; // invalid format
+        }
+        printf("frame number: %d\n", frame_number);
+        printf("binary format: %s\n", binary_frame_number);
+        printf("half frame flag: %c\n", half_frame_flag);
+    }
+
+
+
+    /* Build the binary output */
     strcpy(binary_output, "101010"); // Start pattern
     strcat(binary_output, binary_dx_code_1);
-    strcat(binary_output, "0"); // Separator
+    strcat(binary_output, "0"); // separator
     strcat(binary_output, binary_dx_code_2);
     if (*has_frame_info) {
         strcat(binary_output, binary_frame_number);
-        strcat(binary_output, half_frame_flag == 'A' ? "1" : "0"); // Half-frame flag
-        strcat(binary_output, "0"); // Separator
+        if (half_frame_flag == 'A' || half_frame_flag == 'a') {
+            strcat(binary_output, "1"); // Half-frame flag is 1 for 'A'
+        } else {
+            strcat(binary_output, "0"); // Default is 0
+        }
+        strcat(binary_output, "0"); // separator
     }
+    
 
     // Compute parity bit
-    for (int i = 6; binary_output[i] != '\0'; i++) {
+    for (i = 6; binary_output[i] != '\0'; i++) {
         if (binary_output[i] == '1') {
             parity_bit++;
         }
     }
-    strcat(binary_output, parity_bit % 2 == 1 ? "1" : "0");
+
+    parity_bit %= 2;
+    printf("parity bit: %d\n", parity_bit);
+    if (parity_bit){
+        strcat(binary_output, "1");
+    }
+    else{
+        strcat(binary_output, "0");
+    }
+
     strcat(binary_output, "0101"); // Stop pattern
 
     *output_length = strlen(binary_output);
     return 0; // Success
 }
+
+
 
 // Helper function to extract dx_code_1 and dx_code_2 from combined code
 void extract_dx_codes(int combined_code, int *dx_code_1, int *dx_code_2) {
@@ -231,6 +267,7 @@ INTERNAL int dxfilmedge(struct zint_symbol *symbol, unsigned char source[], int 
     }
     else{
         printf("  Failed to parse.\n\n");
+        return -1;
     }
 
 
@@ -284,10 +321,11 @@ INTERNAL int dxfilmedge(struct zint_symbol *symbol, unsigned char source[], int 
 
     if (symbol->output_options & COMPLIANT_HEIGHT) {
 
-
-        const float min_row_height = 2.0f;  // Minimum height defined by standard
+        // AFAIK There is no standard on minimum and maximum height,
+        // So the margins are given close to the measurements.
+        const float min_row_height = 2.1f;
         const float default_height = 5.08f; // Measured height on 35mm films. Seems like a bar is 1 * 2.54mm.
-        const float max_height = 8.0f; // Maximum height allowed by standard
+        const float max_height = 8.0f;
 
         // Calculate the height based on the width-to-height ratio
         // float calculated_height = (float)symbol->width * bar_height_ratio;
