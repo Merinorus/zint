@@ -63,7 +63,7 @@ void int_to_binary(int value, int width, char *output) {
 void str_to_uppercase(char *str) {
     int i;
     for (i = 0; str[i] != '\0'; i++) {
-        str[i] = toupper((unsigned char)str[i]);
+        str[i] = toupper(str[i]);
     }
 }
 
@@ -81,31 +81,32 @@ int count_char_occurrences(const char *str, char target) {
 }
 
 
-int parse_dx_code(struct zint_symbol *symbol, const unsigned char *source, char *binary_output, int *output_length, bool *has_frame_info) {
+int parse_dx_code(struct zint_symbol *symbol, const char *source, char *binary_output, int *output_length, bool *has_frame_info) {
 
     int i;
     int parity_bit = 0;
     int dx_extract = -1;
     int dx_code_1 = -1, dx_code_2 = -1, frame_number = -1;
     char binary_dx_code_1[8], binary_dx_code_2[5], binary_frame_number[7];
-    char half_frame_flag = '\0', special_frame_number='\0';
-    unsigned char dx_info[MAX_DX_INFO_LENGTH] = "\0";
-    unsigned char frame_info[MAX_FRAME_INFO_LENGTH] = "\0";
-    unsigned char *detected_char = strchr(source, ' ');
+    char half_frame_flag = '\0';
+    char dx_info[MAX_DX_INFO_LENGTH] = "\0";
+    char frame_info[MAX_FRAME_INFO_LENGTH] = "\0";
+    char *detected_char = strchr((const char *)(source), ' ');
+    const char *frame_start;
 
     *has_frame_info = false;
 
     /* Check if there is the '/' separator, which indicates the frame number is present. */
-    detected_char = strchr(source, '/');
+    detected_char = strchr((const char *)(source), '/');
     if (detected_char){
         /* Split the DX information from the frame number */
-        size_t dx_length = detected_char - source;
+        size_t dx_length = detected_char - (char *)source;
         if (dx_length >= MAX_DX_INFO_LENGTH){
             return errtxt(ZINT_ERROR_TOO_LONG, symbol, 1001, "DX information is too long.");
         }
         strncpy(dx_info, source, dx_length);
         dx_info[dx_length] = '\0';
-        const unsigned char *frame_start = detected_char + 1;
+        frame_start = detected_char + 1;
         if (strlen(frame_start) >= MAX_FRAME_INFO_LENGTH) {
             return errtxt(ZINT_ERROR_TOO_LONG, symbol, 1002, "Frame number part is too long.");
         }
@@ -120,7 +121,7 @@ int parse_dx_code(struct zint_symbol *symbol, const unsigned char *source, char 
         strcpy(dx_info, source);
     }
 
-    if ((i = not_sane(IS_NUM_F | IS_MNS_F, dx_info, strlen(dx_info)))){
+    if ((i = not_sane(IS_NUM_F | IS_MNS_F, (unsigned char *)dx_info, strlen(dx_info)))){
         return errtxtf(ZINT_ERROR_INVALID_DATA, symbol, 1012, "Invalid character at position %d in DX info (digits and \'-\' character only)", i);
     }
 
@@ -250,7 +251,7 @@ int parse_dx_code(struct zint_symbol *symbol, const unsigned char *source, char 
 }
 
 
-INTERNAL int dxfilmedge(struct zint_symbol *symbol, unsigned char source[], int length) {
+INTERNAL int dxfilmedge(struct zint_symbol *symbol, char source[], int length) {
     int i;
     int writer = 0;
     int error_number = 0;
@@ -258,17 +259,25 @@ INTERNAL int dxfilmedge(struct zint_symbol *symbol, unsigned char source[], int 
     char char_data[32];
     int data_length;
     bool has_frame_info;
-    int parse_result = parse_dx_code(symbol, source, char_data, &data_length, &has_frame_info);
+
+    const char long_clock_pattern[] = "1111101010101010101010101010111";
+    const char short_clock_pattern[] = "11111010101010101010111";
+    const char *clock_pattern;
+    int clock_length;
+    int parse_result = -1;
+
+    if (length > 10) {
+        return errtxtf(ZINT_ERROR_TOO_LONG, symbol, 1016, "Input length %d too long (maximum 10)", length);
+    }
+
+    parse_result = parse_dx_code(symbol, source, char_data, &data_length, &has_frame_info);
     if (parse_result != 0){
         if (ZINT_DEBUG_PRINT) printf("Error %s\n\n", symbol->errtxt);
         return parse_result;
     }
 
     /* Clock signal is longer if the frame number is provided */
-    const char long_clock_pattern[] = "1111101010101010101010101010111";
-    const char short_clock_pattern[] = "11111010101010101010111";
-    const char *clock_pattern;
-    int clock_length;
+
     if (has_frame_info){
         clock_pattern = long_clock_pattern;
         clock_length = sizeof(long_clock_pattern) -1;
