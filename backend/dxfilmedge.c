@@ -102,27 +102,31 @@ int parse_dx_code(struct zint_symbol *symbol, const char *source, char *binary_o
         /* Split the DX information from the frame number */
         size_t dx_length = detected_char - (char *)source;
         if (dx_length >= MAX_DX_INFO_LENGTH){
-            return errtxt(ZINT_ERROR_TOO_LONG, symbol, 1001, "DX information is too long.");
+            return errtxt(ZINT_ERROR_INVALID_DATA, symbol, 1014, "DX information is too long");
         }
         strncat(dx_info, source, dx_length);
         dx_info[dx_length] = '\0';
         frame_start = detected_char + 1;
         if (strlen(frame_start) >= MAX_FRAME_INFO_LENGTH) {
-            return errtxt(ZINT_ERROR_TOO_LONG, symbol, 1002, "Frame number part is too long.");
+            return errtxt(ZINT_ERROR_INVALID_DATA, symbol, 1002, "Frame number part is too long");
         }
         strncat(frame_info, frame_start, sizeof(frame_info) - 1);
         *has_frame_info = true;
+        str_to_uppercase(frame_info);
+        if ((i = not_sane(IS_UPR_F | IS_NUM_F | IS_MNS_F, (unsigned char *)(frame_info), strlen(frame_info)))){
+            return errtxtf(ZINT_ERROR_INVALID_DATA, symbol, 1012, "Frame number \"%s\" is invalid (expected digits, eventually followed by \'A\')", frame_info);
+        }
     }
     else{
         /* No "/" found, store the entire input in dx_info */
         if (strlen(source) >= MAX_DX_INFO_LENGTH) {
-            return errtxt(ZINT_ERROR_TOO_LONG, symbol, 1003, "DX information is too long.");
+            return errtxt(ZINT_ERROR_INVALID_DATA, symbol, 1003, "DX information is too long");
         }
         strncat(dx_info, source, sizeof(dx_info) - 1);
     }
 
     if ((i = not_sane(IS_NUM_F | IS_MNS_F, (unsigned char *)dx_info, strlen(dx_info)))){
-        return errtxtf(ZINT_ERROR_INVALID_DATA, symbol, 1012, "Invalid character at position %d in DX info (digits and \'-\' character only)", i);
+        return errtxtf(ZINT_ERROR_INVALID_DATA, symbol, 1016, "Invalid character at position %d in DX info (digits and \'-\' character only)", i);
     }
 
     if (ZINT_DEBUG_PRINT) printf("\nDX info part: \"%s\", Frame info part: \"%s\"\n", dx_info, frame_info);
@@ -131,26 +135,23 @@ int parse_dx_code(struct zint_symbol *symbol, const char *source, char *binary_o
         /* DX code parts 1 and 2 are given directly, separated by a '-'. Eg: "79-7" */
         if (ZINT_DEBUG_PRINT) printf("DX code 1 and 2 are separated by a dash \'-\'\n");
         if (count_char_occurrences(dx_info, '-') > 1){
-            return errtxt(ZINT_ERROR_INVALID_DATA, symbol, 1013, "The \'-\' is used to separate DX parts 1 and 2, and should be used no more than once.");
+            return errtxt(ZINT_ERROR_INVALID_DATA, symbol, 1009, "The \'-\' is used to separate DX parts 1 and 2, and should be used no more than once");
         }
         if (sscanf(dx_info, "%d-%d", &dx_code_1, &dx_code_2) < 2){
-            return errtxt(ZINT_ERROR_INVALID_DATA, symbol, 1004, "Wrong format for DX parts 1 and 2. Expected format: XXX-XX (digits).");
+            return errtxt(ZINT_ERROR_INVALID_DATA, symbol, 1004, "Wrong format for DX parts 1 and 2 (expected format: XXX-XX, digits)");
         }
         if (dx_code_1 <= 0 || dx_code_1 > 127){
-            return errtxtf(ZINT_ERROR_INVALID_DATA, symbol, 1007, "DX part 1 \"%d\" must be between 1 and 127.", dx_code_1);
+            return errtxtf(ZINT_ERROR_INVALID_DATA, symbol, 1006, "DX part 1 \"%d\" must be between 1 and 127", dx_code_1);
         }
         if (dx_code_2 < 0 || dx_code_2 > 15){
-            return errtxtf(ZINT_ERROR_INVALID_DATA, symbol, 1008, "DX part 2 \"%d\" must be between 0 and 15.", dx_code_2);
+            return errtxtf(ZINT_ERROR_INVALID_DATA, symbol, 1007, "DX part 2 \"%d\" must be between 0 and 15", dx_code_2);
         }
     }
     else{
         /* DX format is either 4 digits (DX Extract, eg: 1271) or 6 digits (DX Full, eg: 012710) */
         if (ZINT_DEBUG_PRINT) printf("No \'-\' separator, computing from DX Extract (4 digits) or DX Full (6 digits)\n");
-        if (strlen(dx_info) > 6){
-            return errtxt(ZINT_ERROR_TOO_LONG, symbol, 1005, "DX number is too long. Expected: 4 digits (DX extract) or 6 digits (DX full).");
-        }
-        else if (strlen(dx_info) == 5){
-            return errtxtf(ZINT_ERROR_INVALID_DATA, symbol, 1006, "DX number \"%s\" is incorrect. Expected: 4 digits (DX extract) or 6 digits (DX full).", dx_info);
+        if (strlen(dx_info) == 5 || strlen(dx_info) > 6){
+            return errtxtf(ZINT_ERROR_INVALID_DATA, symbol, 1005, "DX number \"%s\" is incorrect; expected 4 digits (DX extract) or 6 digits (DX full)", dx_info);
         }
         if (strlen(dx_info) == 6){
             if (ZINT_DEBUG_PRINT) printf("DX full format detected: %s. Removing the first and the last characters.\n", dx_info);
@@ -162,10 +163,11 @@ int parse_dx_code(struct zint_symbol *symbol, const char *source, char *binary_o
         }
         /* Compute the DX parts 1 and 2 from the DX extract */
         if (sscanf(dx_info, "%d", &dx_extract) < 1){
-            return errtxtf(ZINT_ERROR_INVALID_DATA, symbol, 1006, "DX number \"%s\" is incorrect. Expected: 4 digits (DX extract) or 6 digits (DX full).", dx_info);
+            /* Should not happen (DX info format has been checked above), but better safe than sorry */
+            return errtxtf(ZINT_ERROR_INVALID_DATA, symbol, 1005, "DX number \"%s\" is incorrect; expected 4 digits (DX extract) or 6 digits (DX full)", dx_info);
         }
         if (dx_extract <= 1 || dx_extract > 2047){
-            return errtxtf(ZINT_ERROR_INVALID_DATA, symbol, 1010, "DX extract \"%d\" must be between 0001 and 2047.", dx_extract);
+            return errtxtf(ZINT_ERROR_INVALID_DATA, symbol, 1015, "DX extract \"%d\" must be between 0001 and 2047", dx_extract);
         }
         if (ZINT_DEBUG_PRINT) printf("Computed DX extract: %04d\n", dx_extract);
         dx_code_1 = dx_extract / 16;
@@ -180,8 +182,9 @@ int parse_dx_code(struct zint_symbol *symbol, const char *source, char *binary_o
     if (ZINT_DEBUG_PRINT) printf("%-*s%d\t-> %s\n", DEBUG_STR_LEN, "DX code 2:", dx_code_2, binary_dx_code_2);
 
     if (*has_frame_info) {
-        str_to_uppercase(frame_info);
-
+        if (strlen(frame_info) < 1){
+            return errtxtf(ZINT_ERROR_INVALID_DATA, symbol, 1017, "Frame number indicator \"/\" at position %d, but frame number is empty", (int)(detected_char - (char *)source + 1));
+        }
         /* Some frame numbers are special values, convert them their equivalent number */
         if (strcmp(frame_info, "S") == 0 || strcmp(frame_info, "X") == 0) {
             strcpy(frame_info, "62");
@@ -198,10 +201,10 @@ int parse_dx_code(struct zint_symbol *symbol, const char *source, char *binary_o
         }
 
         if (sscanf(frame_info, "%d%c", &frame_number, &half_frame_flag) < 1){
-            return errtxtf(ZINT_ERROR_INVALID_DATA, symbol, 1015, "frame number \"%s\" is invalid, it should be digits eventually followed by \'A\'", frame_info);
+            return errtxtf(ZINT_ERROR_INVALID_DATA, symbol, 1012, "Frame number \"%s\" is invalid (expected digits, eventually followed by \'A\')", frame_info);
         }
         if (frame_number < 0 || frame_number > 63){
-            return errtxtf(ZINT_ERROR_INVALID_DATA, symbol, 1009, "Frame number \"%d\"should be between 0 and 63.", frame_number);
+            return errtxtf(ZINT_ERROR_INVALID_DATA, symbol, 1008, "Frame number \"%d\"should be between 0 and 63", frame_number);
         }
         int_to_binary(frame_number, 6, binary_frame_number);
         if (ZINT_DEBUG_PRINT) printf("%-*s%d\t-> %s\n", DEBUG_STR_LEN, "Frame number:", frame_number, binary_frame_number);
@@ -221,7 +224,7 @@ int parse_dx_code(struct zint_symbol *symbol, const char *source, char *binary_o
             strcat(binary_output, "1"); /* Half-frame is set */
         } else {
             if (half_frame_flag){
-                return errtxtf(ZINT_ERROR_INVALID_DATA, symbol, 1015, "frame number \"%s\" is invalid, it should be digits eventually followed by \'A\'", frame_info);
+                return errtxtf(ZINT_ERROR_INVALID_DATA, symbol, 1012, "Frame number \"%s\" is invalid (expected digits, eventually followed by \'A\')", frame_info);
             }
             if (ZINT_DEBUG_PRINT) printf("%-*s\'%c\'\t-> 0\n", DEBUG_STR_LEN, "Half frame flag:", half_frame_flag);
             strcat(binary_output, "0"); /* Half-frame is NOT set */
@@ -267,7 +270,7 @@ INTERNAL int dxfilmedge(struct zint_symbol *symbol, char source[], int length) {
     int parse_result = -1;
 
     if (length > 10) {
-        return errtxtf(ZINT_ERROR_TOO_LONG, symbol, 1016, "Input length %d too long (maximum 10)", length);
+        return errtxtf(ZINT_ERROR_TOO_LONG, symbol, 1013, "Input length %d too long (maximum 10)", length);
     }
 
     parse_result = parse_dx_code(symbol, source, char_data, &data_length, &has_frame_info);

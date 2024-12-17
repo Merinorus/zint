@@ -228,6 +228,7 @@
 //     testFinish();
 // }
 
+
 static void test_encode(const testCtx *const p_ctx) {
     int debug = p_ctx->debug;
 
@@ -254,13 +255,35 @@ static void test_encode(const testCtx *const p_ctx) {
         /*  2*/ { BARCODE_DXFILMEDGE, -1, "012710", 0, 2, 23, "",
                     "1111101010101010101011110101010011110011100101"
                 },
-        /* First digit and last digit should not impact the result ignored */
         /*  3*/ { BARCODE_DXFILMEDGE, -1, "112712", 0, 2, 23, "",
                     "1111101010101010101011110101010011110011100101"
                 },
+        /* Lower limit: DX part 1 = 1, DX part 2 = 0*/
         /*  ?*/ { BARCODE_DXFILMEDGE, -1, "1-0", 0, 2, 23, "",
                     "1111101010101010101011110101000000010000010101"
                 },
+        /*  ?*/ { BARCODE_DXFILMEDGE, -1, "000160", 0, 2, 23, "",
+                    "1111101010101010101011110101000000010000010101"
+                },
+        /*  ?*/ { BARCODE_DXFILMEDGE, -1, "16", 0, 2, 23, "",
+                    "1111101010101010101011110101000000010000010101"
+                },
+        /* Upper limit: DX part 1 = 127, DX part 2 = 15 */
+        /*  ?*/ { BARCODE_DXFILMEDGE, -1, "920479/63A", 0, 2, 31, "",
+                    "11111010101010101010101010101111010101111111011111111111000101"
+                },
+        /*  ?*/ { BARCODE_DXFILMEDGE, -1, "127-15/00A", 0, 2, 31, "",
+                    "11111010101010101010101010101111010101111111011111111111000101"
+                },
+
+        /*  ?*/ { BARCODE_DXFILMEDGE, -1, "79-7/1", 0, 2, 31, "",
+                    "11111010101010101010101010101111010101001111001110000010010101"
+                },
+        /* Optional behavior: leading zeros are accepted*/
+        /*  ?*/ { BARCODE_DXFILMEDGE, -1, "0079-7/001", 0, 2, 31, "",
+                    "11111010101010101010101010101111010101001111001110000010010101"
+                },
+        /* Frame number */
         /*  ?*/ { BARCODE_DXFILMEDGE, -1, "79-7/1", 0, 2, 31, "",
                     "11111010101010101010101010101111010101001111001110000010010101"
                 },
@@ -279,16 +302,57 @@ static void test_encode(const testCtx *const p_ctx) {
         /*  ?*/ { BARCODE_DXFILMEDGE, -1, "212715/1A", 0, 2, 31, "",
                     "11111010101010101010101010101111010101001111001110000011000101"
                 },
+        /* Special frame numbers */
+        /*  ?*/ { BARCODE_DXFILMEDGE, -1, "79-7/62", 0, 2, 31, "",
+                    "11111010101010101010101010101111010101001111001111111100010101"
+                },
+        /*  ?*/ { BARCODE_DXFILMEDGE, -1, "79-7/S", 0, 2, 31, "",
+                    "11111010101010101010101010101111010101001111001111111100010101"
+                },
+        /*  ?*/ { BARCODE_DXFILMEDGE, -1, "79-7/x", 0, 2, 31, "",
+                    "11111010101010101010101010101111010101001111001111111100010101"
+                },
+        /*  ?*/ { BARCODE_DXFILMEDGE, -1, "79-7/62a", 0, 2, 31, "",
+                    "11111010101010101010101010101111010101001111001111111101000101"
+                },
+        /*  ?*/ { BARCODE_DXFILMEDGE, -1, "79-7/sA", 0, 2, 31, "",
+                    "11111010101010101010101010101111010101001111001111111101000101"
+                },
+        /*  ?*/ { BARCODE_DXFILMEDGE, -1, "79-7/Xa", 0, 2, 31, "",
+                    "11111010101010101010101010101111010101001111001111111101000101"
+                },
+        /*  ?*/ { BARCODE_DXFILMEDGE, -1, "79-7/63", 0, 2, 31, "",
+                    "11111010101010101010101010101111010101001111001111111110000101"
+                },
+        /*  ?*/ { BARCODE_DXFILMEDGE, -1, "79-7/k", 0, 2, 31, "",
+                    "11111010101010101010101010101111010101001111001111111110000101"
+                },
+        /*  ?*/ { BARCODE_DXFILMEDGE, -1, "79-7/00", 0, 2, 31, "",
+                    "11111010101010101010101010101111010101001111001111111110000101"
+                },
+        /*  ?*/ { BARCODE_DXFILMEDGE, -1, "79-7/63a", 0, 2, 31, "",
+                    "11111010101010101010101010101111010101001111001111111111010101"
+                },
+        /*  ?*/ { BARCODE_DXFILMEDGE, -1, "79-7/kA", 0, 2, 31, "",
+                    "11111010101010101010101010101111010101001111001111111111010101"
+                },
+        /*  ?*/ { BARCODE_DXFILMEDGE, -1, "79-7/00a", 0, 2, 31, "",
+                    "11111010101010101010101010101111010101001111001111111111010101"
+                },
+        /*  ?*/ { BARCODE_DXFILMEDGE, -1, "79-7/0", 0, 2, 31, "",
+                    "11111010101010101010101010101111010101001111001110000000000101"
+                },
+        /*  ?*/ { BARCODE_DXFILMEDGE, -1, "79-7/F", 0, 2, 31, "",
+                    "11111010101010101010101010101111010101001111001110000000000101"
+                },
+        /*  ?*/ { BARCODE_DXFILMEDGE, -1, "79-7/0a", 0, 2, 31, "",
+                    "11111010101010101010101010101111010101001111001110000001010101"
+                },
+        /*  ?*/ { BARCODE_DXFILMEDGE, -1, "79-7/fA", 0, 2, 31, "",
+                    "11111010101010101010101010101111010101001111001110000001010101"
+                },
 
-        /* Tests to do:
-        - Should raise error on DX Code 1 <= 0 and > 127 (input : "1-0", dx extracts "1" to "15")
-        - Should raise error on DX code 2 < 0 and > 15
-        - Should raise error on frame number > 63
-        - Should raise error on frame number unknown? eg: "000", "H"...
-        - Should not display anything on error
-        - Hints on output ? Type of DX code (dx codes 1 and 2 or dx extract...)
-        - Show allowed formats
-         */
+
     };
     const int data_size = ARRAY_SIZE(data);
     int i, length, ret;
@@ -359,116 +423,87 @@ static void test_encode(const testCtx *const p_ctx) {
     testFinish();
 }
 
-// #include <time.h>
+static void test_input(const testCtx *const p_ctx) {
+    int debug = p_ctx->debug;
 
-// #define TEST_PERF_ITER_MILLES   5
-// #define TEST_PERF_ITERATIONS    (TEST_PERF_ITER_MILLES * 1000)
-// #define TEST_PERF_TIME(arg) ((arg) * 1000.0 / CLOCKS_PER_SEC)
+    struct item {
+        int symbology;
+        int input_mode;
+        char *data;
+        int ret;
+        int expected_rows;
+        int expected_width;
+        char *expected_errtxt;
+    };
+    /* s/\/\*[ 0-9]*\*\//\=printf("\/\*%3d*\/", line(".") - line("'<")): */
+    static const struct item data[] = {
+        /*  0 */ { BARCODE_DXFILMEDGE, -1, "79-1/123A", ZINT_ERROR_INVALID_DATA, -1, -1, "Error 1002: Frame number part is too long" },
+        /*  1 */ { BARCODE_DXFILMEDGE, -1, "012312365", ZINT_ERROR_INVALID_DATA, -1, -1, "Error 1003: DX information is too long" },
+        /*  2 */ { BARCODE_DXFILMEDGE, -1, "12-", ZINT_ERROR_INVALID_DATA, -1, -1, "Error 1004: Wrong format for DX parts 1 and 2 (expected format: XXX-XX, digits)" },
+        /*  3 */ { BARCODE_DXFILMEDGE, -1, "-12", ZINT_ERROR_INVALID_DATA, -1, -1, "Error 1004: Wrong format for DX parts 1 and 2 (expected format: XXX-XX, digits)" },
+        /*  4 */ { BARCODE_DXFILMEDGE, -1, "01234/00A", ZINT_ERROR_INVALID_DATA, -1, -1, "Error 1005: DX number \"01234\" is incorrect; expected 4 digits (DX extract) or 6 digits (DX full)" },
+        /*  5 */ { BARCODE_DXFILMEDGE, -1, "01234/00A", ZINT_ERROR_INVALID_DATA, -1, -1, "Error 1005: DX number \"01234\" is incorrect; expected 4 digits (DX extract) or 6 digits (DX full)" },
+        /*  6 */ { BARCODE_DXFILMEDGE, -1, "128-0/24", ZINT_ERROR_INVALID_DATA, -1, -1, "Error 1006: DX part 1 \"128\" must be between 1 and 127" },
+        /*  7 */ { BARCODE_DXFILMEDGE, -1, "127-16", ZINT_ERROR_INVALID_DATA, -1, -1, "Error 1007: DX part 2 \"16\" must be between 0 and 15" },
+        /*  8 */ { BARCODE_DXFILMEDGE, -1, "79-2/-1", ZINT_ERROR_INVALID_DATA, -1, -1, "Error 1008: Frame number \"-1\"should be between 0 and 63" },
+        /*  9 */ { BARCODE_DXFILMEDGE, -1, "79-2/64", ZINT_ERROR_INVALID_DATA, -1, -1, "Error 1008: Frame number \"64\"should be between 0 and 63" },
+        /* 10 */ { BARCODE_DXFILMEDGE, -1, "79-2-1", ZINT_ERROR_INVALID_DATA, -1, -1, "Error 1009: The \'-\' is used to separate DX parts 1 and 2, and should be used no more than once" },
+        /* 11 */ { BARCODE_DXFILMEDGE, -1, "110-2/2B", ZINT_ERROR_INVALID_DATA, -1, -1, "Error 1012: Frame number \"2B\" is invalid (expected digits, eventually followed by \'A\')" },
+        /* 12 */ { BARCODE_DXFILMEDGE, -1, "099990/123A", ZINT_ERROR_TOO_LONG, -1, -1, "Error 1013: Input length 11 too long (maximum 10)" },
+        /* 13 */ { BARCODE_DXFILMEDGE, -1, "0123123/1", ZINT_ERROR_INVALID_DATA, -1, -1, "Error 1014: DX information is too long" },
+        /* 14 */ { BARCODE_DXFILMEDGE, -1, "120481", ZINT_ERROR_INVALID_DATA, -1, -1, "Error 1015: DX extract \"2048\" must be between 0001 and 2047" },
+        /* 15 */ { BARCODE_DXFILMEDGE, -1, "12-12A", ZINT_ERROR_INVALID_DATA, -1, -1, "Error 1016: Invalid character at position 6 in DX info (digits and \'-\' character only)" },
+        /* 16 */ { BARCODE_DXFILMEDGE, -1, "X1234X", ZINT_ERROR_INVALID_DATA, -1, -1, "Error 1016: Invalid character at position 1 in DX info (digits and \'-\' character only)" },    
+        /* 17 */ { BARCODE_DXFILMEDGE, -1, "012X", ZINT_ERROR_INVALID_DATA, -1, -1, "Error 1016: Invalid character at position 4 in DX info (digits and \'-\' character only)" },
+        /* 18 */ { BARCODE_DXFILMEDGE, -1, "110-2/", ZINT_ERROR_INVALID_DATA, -1, -1, "Error 1017: Frame number indicator \"/\" at position 6, but frame number is empty" },
+    };
 
-// /* Not a real test, just performance indicator */
-// static void test_perf(const testCtx *const p_ctx) {
-//     int debug = p_ctx->debug;
+        /* Tests to do:
+        - Should raise error on frame number unknown? eg: "000", "H"...
+        - Should not display anything on error
+        - Performance test?
+        - Hints on output ? Type of DX code (dx codes 1 and 2 or dx extract...)
+        - Show allowed formats
+         */
 
-//     struct item {
-//         int symbology;
-//         int option_2;
-//         char *data;
-//         int ret;
 
-//         int expected_rows;
-//         int expected_width;
-//         char *comment;
-//     };
-//     static const struct item data[] = {
-//         /*  0*/ { BARCODE_C25INTER, -1, "123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890", 0, 1, 819, "C25INTER 90" },
-//         /*  1*/ { BARCODE_C25INTER, -1, "1234567890", 0, 1, 99, "C25INTER 10" },
-//         /*  2*/ { BARCODE_C25STANDARD, -1, "12345678901234567890123456789012345678901234567890123456789012345678901234567890", 0, 1, 817, "C25STANDARD 80" },
-//         /*  3*/ { BARCODE_C25STANDARD, -1, "1234567890", 0, 1, 117, "C25STANDARD 10" },
-//     };
-//     const int data_size = ARRAY_SIZE(data);
-//     int i, length, ret;
-//     struct zint_symbol *symbol;
+    const int data_size = ARRAY_SIZE(data);
+    int i, length, ret;
+    struct zint_symbol *symbol = NULL;
 
-//     clock_t start;
-//     clock_t total_create = 0, total_encode = 0, total_buffer = 0, total_buf_inter = 0, total_print = 0;
-//     clock_t diff_create, diff_encode, diff_buffer, diff_buf_inter, diff_print;
-//     int comment_max = 0;
+    testStartSymbol("test_input", &symbol);
 
-//     if (!(debug & ZINT_DEBUG_TEST_PERFORMANCE)) { /* -d 256 */
-//         return;
-//     }
+    for (i = 0; i < data_size; i++) {
 
-//     for (i = 0; i < data_size; i++) if ((int) strlen(data[i].comment) > comment_max) comment_max = (int) strlen(data[i].comment);
+        if (testContinue(p_ctx, i)) continue;
 
-//     printf("Iterations %d\n", TEST_PERF_ITERATIONS);
+        symbol = ZBarcode_Create();
+        assert_nonnull(symbol, "Symbol not created\n");
 
-//     for (i = 0; i < data_size; i++) {
-//         int j;
+        length = testUtilSetSymbol(symbol, data[i].symbology, data[i].input_mode, -1 /*eci*/, -1 /*option_1*/, -1 /*option_2*/, -1, -1 /*output_options*/, data[i].data, -1, debug);
 
-//         if (testContinue(p_ctx, i)) continue;
+        ret = ZBarcode_Encode(symbol, (unsigned char *) data[i].data, length);
+        assert_equal(ret, data[i].ret, "i:%d ZBarcode_Encode ret %d != %d (%s)\n", i, ret, data[i].ret, symbol->errtxt);
+        assert_equal(symbol->errtxt[0] == '\0', ret == 0, "i:%d symbol->errtxt not %s (%s)\n", i, ret ? "set" : "empty", symbol->errtxt);
+        assert_zero(strcmp(symbol->errtxt, data[i].expected_errtxt), "i:%d strcmp(%s, %s) != 0\n", i, symbol->errtxt, data[i].expected_errtxt);
 
-//         diff_create = diff_encode = diff_buffer = diff_buf_inter = diff_print = 0;
+        if (ret < ZINT_ERROR) {
+            assert_equal(symbol->rows, data[i].expected_rows, "i:%d symbol->rows %d != %d\n", i, symbol->rows, data[i].expected_rows);
+            assert_equal(symbol->width, data[i].expected_width, "i:%d symbol->width %d != %d\n", i, symbol->width, data[i].expected_width);
+        }
 
-//         for (j = 0; j < TEST_PERF_ITERATIONS; j++) {
-//             start = clock();
-//             symbol = ZBarcode_Create();
-//             diff_create += clock() - start;
-//             assert_nonnull(symbol, "Symbol not created\n");
+        ZBarcode_Delete(symbol);
+    }
 
-//             length = testUtilSetSymbol(symbol, data[i].symbology, DATA_MODE, -1 /*eci*/, -1 /*option_1*/, data[i].option_2, -1, -1 /*output_options*/, data[i].data, -1, debug);
+    testFinish();
+}
 
-//             start = clock();
-//             ret = ZBarcode_Encode(symbol, (unsigned char *) data[i].data, length);
-//             diff_encode += clock() - start;
-//             assert_equal(ret, data[i].ret, "i:%d ZBarcode_Encode ret %d != %d (%s)\n", i, ret, data[i].ret, symbol->errtxt);
-
-//             assert_equal(symbol->rows, data[i].expected_rows, "i:%d symbol->rows %d != %d (%s)\n", i, symbol->rows, data[i].expected_rows, data[i].data);
-//             assert_equal(symbol->width, data[i].expected_width, "i:%d symbol->width %d != %d (%s)\n", i, symbol->width, data[i].expected_width, data[i].data);
-
-//             start = clock();
-//             ret = ZBarcode_Buffer(symbol, 0 /*rotate_angle*/);
-//             diff_buffer += clock() - start;
-//             assert_zero(ret, "i:%d ZBarcode_Buffer ret %d != 0 (%s)\n", i, ret, symbol->errtxt);
-
-//             symbol->output_options |= OUT_BUFFER_INTERMEDIATE;
-//             start = clock();
-//             ret = ZBarcode_Buffer(symbol, 0 /*rotate_angle*/);
-//             diff_buf_inter += clock() - start;
-//             assert_zero(ret, "i:%d ZBarcode_Buffer OUT_BUFFER_INTERMEDIATE ret %d != 0 (%s)\n", i, ret, symbol->errtxt);
-//             symbol->output_options &= ~OUT_BUFFER_INTERMEDIATE; /* Undo */
-
-//             start = clock();
-//             ret = ZBarcode_Print(symbol, 0 /*rotate_angle*/);
-//             diff_print += clock() - start;
-//             assert_zero(ret, "i:%d ZBarcode_Print ret %d != 0 (%s)\n", i, ret, symbol->errtxt);
-//             assert_zero(testUtilRemove(symbol->outfile), "i:%d testUtilRemove(%s) != 0\n", i, symbol->outfile);
-
-//             ZBarcode_Delete(symbol);
-//         }
-
-//         printf("%*s: encode % 8gms, buffer % 8gms, buf_inter % 8gms, print % 8gms, create % 8gms\n", comment_max, data[i].comment,
-//                 TEST_PERF_TIME(diff_encode), TEST_PERF_TIME(diff_buffer), TEST_PERF_TIME(diff_buf_inter), TEST_PERF_TIME(diff_print), TEST_PERF_TIME(diff_create));
-
-//         total_create += diff_create;
-//         total_encode += diff_encode;
-//         total_buffer += diff_buffer;
-//         total_buf_inter += diff_buf_inter;
-//         total_print += diff_print;
-//     }
-//     if (p_ctx->index == -1) {
-//         printf("%*s: encode % 8gms, buffer % 8gms, buf_inter % 8gms, print % 8gms, create % 8gms\n", comment_max, "totals",
-//                 TEST_PERF_TIME(total_encode), TEST_PERF_TIME(total_buffer), TEST_PERF_TIME(total_buf_inter), TEST_PERF_TIME(total_print), TEST_PERF_TIME(total_create));
-//     }
-// }
 
 int main(int argc, char *argv[]) {
 
     testFunction funcs[] = { /* name, func */
-        // { "test_large", test_large },
-        // { "test_hrt", test_hrt },
-        // { "test_input", test_input },
+        { "test_input", test_input },
         { "test_encode", test_encode },
-        // { "test_perf", test_perf },
     };
 
     testRun(argc, argv, funcs, ARRAY_SIZE(funcs));
@@ -478,4 +513,3 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-/* vim: set ts=4 sw=4 et : */
